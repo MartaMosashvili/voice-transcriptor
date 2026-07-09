@@ -1,6 +1,7 @@
 const cors = require('cors');
 const dotenv = require('dotenv');
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const fs = require('fs');
 const multer = require('multer');
 const OpenAI = require('openai');
@@ -149,6 +150,16 @@ const upload = multer({
 
 app.use(cors());
 
+const transcribeRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    res.status(429).json({ error: 'მოთხოვნების ლიმიტი გადაჭარბებულია. სცადეთ ხელახლა ერთი წუთის შემდეგ.' });
+  },
+});
+
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
@@ -157,7 +168,7 @@ app.get('/index.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-app.post('/transcribe', upload.single('audio'), async (req, res) => {
+app.post('/transcribe', transcribeRateLimit, upload.single('audio'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: "Missing audio file. Send multipart/form-data with field name 'audio'." });
   }
@@ -180,10 +191,9 @@ app.post('/transcribe', upload.single('audio'), async (req, res) => {
 
     return res.json({ text });
   } catch (error) {
-    console.error('OpenAI transcription failed:', error);
+    console.error('OpenAI transcription failed:', error.message || error);
     return res.status(502).json({
       error: 'Transcription failed. Please try again.',
-      details: error.message,
     });
   } finally {
     fs.promises.unlink(req.file.path).catch(() => {});

@@ -341,7 +341,7 @@
 </head>
 <body>
   <main class="orb-wrap" aria-label="Voice transcript">
-    <button class="orb" id="orb" type="button" aria-label="Start microphone transcription"></button>
+    <button class="orb" id="orb" type="button" aria-label="მიკროფონის ტრანსკრიპციის დაწყება"></button>
     <div class="state-label" id="stateLabel">დააჭირეთ წრეს დასაწყებად</div>
     <div id="transcript" aria-live="polite"></div>
     <div class="controls" id="controls" aria-label="Transcript controls">
@@ -357,7 +357,6 @@
     const MIN_SPEECH_MS = 500;
     const MAX_CHUNK_MS = 12000;
     const CONTEXT_CHARS = 200;
-    const VOLUME_LOG_MS = 200;
 
     const orb = document.getElementById('orb');
     const transcript = document.getElementById('transcript');
@@ -376,12 +375,16 @@
     let animationFrame = null;
     let isListening = false;
     let lastAnalysisAt = 0;
-    let lastVolumeLogAt = 0;
     let pendingTranscriptions = 0;
     let recorderMimeType = '';
     let transcriptionContext = '';
     let transcriptEntries = [];
     let stateLabelTimer = null;
+    let chunkSequence = 0;
+    let nextRenderSequence = 0;
+    let pendingTranscriptResults = new Map();
+    let requestGeneration = 0;
+    let activeAbortControllers = new Set();
 
     function getSupportedWebmMimeType() {
       if (!window.MediaRecorder) {
@@ -485,6 +488,27 @@
         .slice(-CONTEXT_CHARS);
     }
 
+    function flushOrderedTranscriptResults() {
+      while (pendingTranscriptResults.has(nextRenderSequence)) {
+        const text = pendingTranscriptResults.get(nextRenderSequence);
+        pendingTranscriptResults.delete(nextRenderSequence);
+        nextRenderSequence += 1;
+
+        if (text) {
+          appendTranscript(text);
+        }
+      }
+    }
+
+    function invalidateInFlightTranscriptions() {
+      requestGeneration += 1;
+      activeAbortControllers.forEach((controller) => controller.abort());
+      activeAbortControllers.clear();
+      pendingTranscriptResults.clear();
+      chunkSequence = 0;
+      nextRenderSequence = 0;
+    }
+
     function handleFinishedChunk(chunk) {
       if (!chunk.parts.length || !chunk.sawSpeech || chunk.peakVolume < SILENCE_THRESHOLD || chunk.speechMs < MIN_SPEECH_MS) {
         return;
@@ -499,6 +523,12 @@
     }
 
     async function sendChunkForTranscription(audioBlob) {
+      const sequence = chunkSequence;
+      chunkSequence += 1;
+      const generation = requestGeneration;
+      const abortController = new AbortController();
+      activeAbortControllers.add(abortController);
+
       pendingTranscriptions += 1;
       updateProcessingState();
 
@@ -511,7 +541,12 @@
         const response = await fetch('/transcribe', {
           method: 'POST',
           body: formData,
+          signal: abortController.signal,
         });
+
+        if (generation !== requestGeneration) {
+          return;
+        }
 
         if (!response.ok) {
           const errorText = await response.text();
@@ -520,16 +555,22 @@
 
         const result = await response.json();
         const text = (result.text || '').trim();
-        if (text) {
-          appendTranscript(text);
-        }
+        pendingTranscriptResults.set(sequence, text || null);
+        flushOrderedTranscriptResults();
       } catch (error) {
+        if (error.name === 'AbortError' || generation !== requestGeneration) {
+          return;
+        }
+
         console.error('Transcription request failed:', error);
         if (error instanceof TypeError) {
           rebuildTranscriptionContext();
         }
-        setStatus('The audio could not be transcribed. Please try again.');
+        pendingTranscriptResults.set(sequence, null);
+        flushOrderedTranscriptResults();
+        setStatus('ჩანაწერის ამოცნობა ვერ მოხერხდა. სცადეთ ხელახლა.');
       } finally {
+        activeAbortControllers.delete(abortController);
         pendingTranscriptions -= 1;
         updateProcessingState();
       }
@@ -597,11 +638,6 @@
       const volume = measureVolume();
       updateOrbFromVolume(volume);
 
-      if (now - lastVolumeLogAt >= VOLUME_LOG_MS) {
-        console.log('mic volume', volume.toFixed(4), 'threshold', SILENCE_THRESHOLD);
-        lastVolumeLogAt = now;
-      }
-
       const chunk = activeChunk;
       chunk.peakVolume = Math.max(chunk.peakVolume, volume);
 
@@ -636,7 +672,7 @@
       recorderMimeType = getSupportedWebmMimeType();
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !AudioContextClass || !recorderMimeType) {
         orb.disabled = true;
-        setStatus('This browser cannot record microphone audio in the required WebM format.');
+        setStatus('ამ ბრაუზერში ვერ ხდება მიკროფონის ჩაწერა WebM ფორმატში.');
         return;
       }
 
@@ -654,10 +690,9 @@
 
         isListening = true;
         lastAnalysisAt = performance.now();
-        lastVolumeLogAt = 0;
         orb.classList.add('listening');
         document.body.classList.add('listening');
-        orb.setAttribute('aria-label', 'Stop microphone transcription');
+        orb.setAttribute('aria-label', 'მიკროფონის ტრანსკრიპციის გაჩერება');
         setStatus('');
         updateStateLabel();
 
@@ -666,7 +701,7 @@
       } catch (error) {
         console.error('Microphone setup failed:', error);
         const denied = error.name === 'NotAllowedError' || error.name === 'SecurityError';
-        setStatus(denied ? 'Microphone access was denied. Please allow microphone access and try again.' : 'The microphone could not be started. Please try again.');
+        setStatus(denied ? 'მიკროფონზე წვდომა აკრძალულია. დაუშვით წვდომა და სცადეთ ხელახლა.' : 'მიკროფონის ჩართვა ვერ მოხერხდა. სცადეთ ხელახლა.');
       }
     }
 
@@ -679,7 +714,7 @@
       orb.classList.remove('listening');
       document.body.classList.remove('listening');
       orb.style.setProperty('--orb-scale', '1');
-      orb.setAttribute('aria-label', 'Start microphone transcription');
+      orb.setAttribute('aria-label', 'მიკროფონის ტრანსკრიპციის დაწყება');
       updateStateLabel();
 
       if (animationFrame) {
@@ -734,6 +769,7 @@
     });
 
     clearTranscript.addEventListener('click', () => {
+      invalidateInFlightTranscriptions();
       transcript.replaceChildren();
       transcriptEntries = [];
       transcriptionContext = '';
