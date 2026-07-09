@@ -1,4 +1,7 @@
 # Transcriptor
+**🔴 Live Demo:** https://voice-transcriptor.onrender.com
+
+*პირველი ჩატვირთვა შეიძლება ~1 წუთი გაგრძელდეს (უფასო სერვერი უმოქმედობისას იძინებს). რეკომენდებული ბრაუზერი: **Chrome** ან **Edge** (Windows, macOS, Android). Safari და iOS არ არის მხარდაჭერილი WebM-ჩაწერის შეზღუდვის გამო.*
 
 Live Georgian speech transcription web app. Node.js/Express backend calls OpenAI `gpt-4o-transcribe`; vanilla JS frontend with a Siri-style orb, chunked recording with silence detection, cross-chunk context continuity, and prompt-echo stripping.
 
