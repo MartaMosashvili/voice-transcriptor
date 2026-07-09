@@ -18,6 +18,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 const uploadDir = path.join(__dirname, 'uploads');
 const maxFileSize = 25 * 1024 * 1024;
+const baseGeorgianPrompt = 'გამარჯობა, ეს არის ქართული საუბრის ტრანსკრიფცია.';
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
@@ -56,6 +57,8 @@ app.post('/transcribe', upload.single('audio'), async (req, res) => {
   }
 
   try {
+    const context = req.body && typeof req.body.context === 'string' ? req.body.context.trim().slice(-200) : '';
+    const prompt = context ? `${baseGeorgianPrompt}\n${context}` : baseGeorgianPrompt;
     const audioBuffer = await fs.promises.readFile(req.file.path);
     const originalFilename = path.basename(req.file.originalname) || req.file.filename;
     const audioFile = await toFile(audioBuffer, originalFilename, {
@@ -65,7 +68,7 @@ app.post('/transcribe', upload.single('audio'), async (req, res) => {
     const transcription = await openai.audio.transcriptions.create({
       file: audioFile,
       model: 'gpt-4o-transcribe',
-      prompt: 'გამარჯობა, ეს არის ქართული საუბრის ტრანსკრიფცია.',
+      prompt,
     });
 
     return res.json({ text: transcription.text || '' });
