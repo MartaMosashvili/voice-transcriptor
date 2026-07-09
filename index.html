@@ -23,12 +23,12 @@
 
     body {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: center;
       min-height: 100vh;
       overflow: hidden;
       background:
-        radial-gradient(circle at 50% 39%, rgba(15, 43, 83, 0.82) 0, rgba(7, 21, 45, 0.72) 27%, rgba(3, 8, 18, 0.95) 67%, #020307 100%);
+        radial-gradient(circle at 50% 35%, rgba(15, 43, 83, 0.82) 0, rgba(7, 21, 45, 0.72) 27%, rgba(3, 8, 18, 0.95) 67%, #020307 100%);
       color: #ffffff;
       font-family: "Segoe UI", "Noto Sans Georgian", Sylfaen, sans-serif;
     }
@@ -58,8 +58,9 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      width: min(640px, calc(100vw - 40px));
-      gap: 18px;
+      width: min(680px, 100vw);
+      gap: 0;
+      padding: max(42px, calc(35vh - 75px)) 20px 32px;
     }
 
     .orb {
@@ -68,6 +69,13 @@
       --glow-mid: 54px;
       --glow-wide: 92px;
       --glow-alpha: 0.52;
+      --orb-pale: rgba(184, 224, 255, 0.9);
+      --orb-mid: rgba(70, 157, 255, 0.74);
+      --orb-ring: rgba(41, 91, 255, 0.52);
+      --orb-edge: rgba(32, 76, 202, 0.18);
+      --glow-mid-color: rgba(105, 183, 255, 0.62);
+      --glow-wide-color: rgba(54, 119, 255, 0.48);
+      --inset-deep: rgba(18, 73, 215, 0.42);
       position: relative;
       width: 150px;
       height: 150px;
@@ -102,14 +110,14 @@
 
     .orb::before {
       background:
-        radial-gradient(circle at 50% 42%, rgba(255, 255, 255, 0.95) 0 9%, rgba(184, 224, 255, 0.9) 18%, rgba(70, 157, 255, 0.74) 41%, rgba(41, 91, 255, 0.52) 62%, rgba(32, 76, 202, 0.18) 100%);
+        radial-gradient(circle at 50% 42%, rgba(255, 255, 255, 0.95) 0 9%, var(--orb-pale) 18%, var(--orb-mid) 41%, var(--orb-ring) 62%, var(--orb-edge) 100%);
       box-shadow:
         0 0 var(--glow-soft) rgba(255, 255, 255, var(--glow-alpha)),
-        0 0 var(--glow-mid) rgba(105, 183, 255, 0.62),
-        0 0 var(--glow-wide) rgba(54, 119, 255, 0.48),
+        0 0 var(--glow-mid) var(--glow-mid-color),
+        0 0 var(--glow-wide) var(--glow-wide-color),
         inset 0 0 24px rgba(255, 255, 255, 0.62),
-        inset 0 -18px 36px rgba(18, 73, 215, 0.42);
-      transition: box-shadow 280ms ease, filter 280ms ease;
+        inset 0 -18px 36px var(--inset-deep);
+      transition: background 360ms ease, box-shadow 280ms ease, filter 280ms ease;
     }
 
     .orb::after {
@@ -124,8 +132,32 @@
     }
 
     .orb.listening {
+      --orb-pale: rgba(218, 252, 255, 0.95);
+      --orb-mid: rgba(94, 220, 255, 0.82);
+      --orb-ring: rgba(63, 151, 255, 0.58);
+      --orb-edge: rgba(40, 111, 219, 0.22);
+      --glow-mid-color: rgba(114, 231, 255, 0.7);
+      --glow-wide-color: rgba(79, 170, 255, 0.56);
+      --inset-deep: rgba(28, 110, 224, 0.46);
       animation: none;
-      filter: saturate(1.2);
+      filter: saturate(1.28) brightness(1.08);
+    }
+
+    .orb:hover:not(:disabled) {
+      filter: saturate(1.18) brightness(1.08);
+    }
+
+    .orb:hover:not(:disabled)::before {
+      box-shadow:
+        0 0 calc(var(--glow-soft) + 10px) rgba(255, 255, 255, calc(var(--glow-alpha) + 0.08)),
+        0 0 calc(var(--glow-mid) + 18px) var(--glow-mid-color),
+        0 0 calc(var(--glow-wide) + 28px) var(--glow-wide-color),
+        inset 0 0 26px rgba(255, 255, 255, 0.68),
+        inset 0 -18px 36px var(--inset-deep);
+    }
+
+    .orb:active:not(:disabled) {
+      transform: scale(calc(var(--orb-scale) * 0.985));
     }
 
     .orb.processing::after {
@@ -133,8 +165,13 @@
       animation: processing-spin 1.35s linear infinite;
     }
 
-    .idle-hint {
+    .state-label {
+      display: flex;
+      align-items: center;
+      justify-content: center;
       min-height: 1.5rem;
+      margin-top: 18px;
+      margin-bottom: 48px;
       color: rgba(232, 244, 255, 0.48);
       font-size: 0.96rem;
       line-height: 1.5;
@@ -145,11 +182,21 @@
       transition: opacity 320ms ease, transform 320ms ease;
     }
 
-    body.listening .idle-hint,
-    body.has-transcript .idle-hint {
+    body.has-transcript:not(.listening):not(.processing) .state-label {
       opacity: 0;
       transform: translateY(-4px);
       pointer-events: none;
+    }
+
+    body.listening .state-label,
+    body.processing .state-label {
+      color: rgba(231, 251, 255, 0.56);
+      text-shadow: 0 0 22px rgba(92, 218, 255, 0.28);
+    }
+
+    .state-label.updating {
+      opacity: 0.28;
+      transform: translateY(3px);
     }
 
     #transcript {
@@ -162,7 +209,7 @@
       min-height: 1.25rem;
       gap: 4px;
       overflow-y: auto;
-      padding: 2px 2px 8px;
+      padding: 2px clamp(14px, 4vw, 28px) 8px;
       scrollbar-color: transparent transparent;
       scrollbar-width: none;
       transition: scrollbar-color 180ms ease;
@@ -231,7 +278,7 @@
       font: inherit;
       font-size: 0.88rem;
       line-height: 1.2;
-      transition: border-color 220ms ease, color 220ms ease, box-shadow 220ms ease, background 220ms ease;
+      transition: border-color 220ms ease, color 220ms ease, box-shadow 220ms ease, background 220ms ease, transform 180ms ease;
     }
 
     .ghost-button:hover,
@@ -241,6 +288,12 @@
       color: rgba(248, 252, 255, 0.88);
       box-shadow: 0 0 22px rgba(73, 148, 255, 0.13);
       outline: none;
+      transform: translateY(-1px);
+    }
+
+    .ghost-button:active {
+      transform: translateY(1px);
+      box-shadow: 0 0 12px rgba(73, 148, 255, 0.09);
     }
 
     .status {
@@ -289,7 +342,7 @@
 <body>
   <main class="orb-wrap" aria-label="Voice transcript">
     <button class="orb" id="orb" type="button" aria-label="Start microphone transcription"></button>
-    <div class="idle-hint" id="idleHint">დააჭირეთ წრეს დასაწყებად</div>
+    <div class="state-label" id="stateLabel">დააჭირეთ წრეს დასაწყებად</div>
     <div id="transcript" aria-live="polite"></div>
     <div class="controls" id="controls" aria-label="Transcript controls">
       <button class="ghost-button" id="downloadTranscript" type="button">გადმოწერა</button>
@@ -309,6 +362,7 @@
     const orb = document.getElementById('orb');
     const transcript = document.getElementById('transcript');
     const status = document.getElementById('status');
+    const stateLabel = document.getElementById('stateLabel');
     const downloadTranscript = document.getElementById('downloadTranscript');
     const clearTranscript = document.getElementById('clearTranscript');
 
@@ -327,6 +381,7 @@
     let recorderMimeType = '';
     let transcriptionContext = '';
     let transcriptEntries = [];
+    let stateLabelTimer = null;
 
     function getSupportedWebmMimeType() {
       if (!window.MediaRecorder) {
@@ -347,15 +402,37 @@
 
     function setProcessing(isProcessing) {
       orb.classList.toggle('processing', isProcessing);
+      document.body.classList.toggle('processing', isProcessing);
+      updateStateLabel();
     }
 
     function updateProcessingState() {
       setProcessing(pendingTranscriptions > 0);
     }
 
+    function updateStateLabel() {
+      const nextText = pendingTranscriptions > 0
+        ? 'მუშავდება...'
+        : isListening
+          ? 'გისმენთ...'
+          : 'დააჭირეთ წრეს დასაწყებად';
+
+      if (stateLabel.textContent === nextText) {
+        return;
+      }
+
+      window.clearTimeout(stateLabelTimer);
+      stateLabel.classList.add('updating');
+      stateLabelTimer = window.setTimeout(() => {
+        stateLabel.textContent = nextText;
+        stateLabel.classList.remove('updating');
+      }, 120);
+    }
+
     function updateTranscriptState() {
       const lines = Array.from(transcript.querySelectorAll('.transcript-line'));
       document.body.classList.toggle('has-transcript', lines.length > 0);
+      updateStateLabel();
 
       lines.forEach((line, index) => {
         const distanceFromNewest = lines.length - 1 - index;
@@ -568,6 +645,7 @@
         document.body.classList.add('listening');
         orb.setAttribute('aria-label', 'Stop microphone transcription');
         setStatus('');
+        updateStateLabel();
 
         createRecorderChunk();
         animationFrame = requestAnimationFrame(analyzeMicrophone);
@@ -588,6 +666,7 @@
       document.body.classList.remove('listening');
       orb.style.setProperty('--orb-scale', '1');
       orb.setAttribute('aria-label', 'Start microphone transcription');
+      updateStateLabel();
 
       if (animationFrame) {
         cancelAnimationFrame(animationFrame);
