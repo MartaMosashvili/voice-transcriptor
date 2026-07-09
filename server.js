@@ -23,6 +23,112 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+function normalizeText(value) {
+  return String(value || '')
+    .normalize('NFKC')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function longestCommonSubstringLength(left, right) {
+  const a = normalizeText(left);
+  const b = normalizeText(right);
+
+  if (!a || !b) {
+    return 0;
+  }
+
+  let previous = new Array(b.length + 1).fill(0);
+  let best = 0;
+
+  for (let i = 1; i <= a.length; i += 1) {
+    const current = new Array(b.length + 1).fill(0);
+
+    for (let j = 1; j <= b.length; j += 1) {
+      if (a[i - 1] === b[j - 1]) {
+        current[j] = previous[j - 1] + 1;
+        best = Math.max(best, current[j]);
+      }
+    }
+
+    previous = current;
+  }
+
+  return best;
+}
+
+function mostlyEchoes(text, source) {
+  const cleanedText = normalizeText(text);
+  const cleanedSource = normalizeText(source);
+
+  if (!cleanedText || !cleanedSource || cleanedSource.length < 12) {
+    return false;
+  }
+
+  if (cleanedText === cleanedSource) {
+    return true;
+  }
+
+  if (cleanedSource.includes(cleanedText) && cleanedText.length >= Math.min(24, cleanedSource.length * 0.5)) {
+    return true;
+  }
+
+  if (cleanedText.startsWith(cleanedSource)) {
+    return true;
+  }
+
+  const sharedLength = longestCommonSubstringLength(cleanedText, cleanedSource);
+  return sharedLength >= 24 && sharedLength / cleanedText.length >= 0.7;
+}
+
+function stripEchoPrefix(text, source) {
+  const cleanedText = normalizeText(text);
+  const cleanedSource = normalizeText(source);
+
+  if (!cleanedText || !cleanedSource) {
+    return cleanedText;
+  }
+
+  if (cleanedText === cleanedSource) {
+    return '';
+  }
+
+  if (cleanedSource.includes(cleanedText) && cleanedText.length >= Math.min(24, cleanedSource.length * 0.5)) {
+    return '';
+  }
+
+  if (cleanedText.startsWith(cleanedSource)) {
+    return cleanedText.slice(cleanedSource.length).replace(/^[\s\p{P}]+/u, '').trim();
+  }
+
+  return cleanedText;
+}
+
+function removePromptEcho(text, sources) {
+  let cleaned = normalizeText(text);
+  const candidates = sources.map(normalizeText).filter(Boolean).sort((a, b) => b.length - a.length);
+
+  for (const source of candidates) {
+    cleaned = stripEchoPrefix(cleaned, source);
+
+    if (!cleaned) {
+      return '';
+    }
+  }
+
+  for (const source of candidates) {
+    if (mostlyEchoes(cleaned, source)) {
+      return '';
+    }
+
+    if (source.length >= 24 && cleaned.includes(source)) {
+      cleaned = cleaned.replace(source, '').replace(/^[\s\p{P}]+|[\s\p{P}]+$/gu, '').trim();
+    }
+  }
+
+  return cleaned;
+}
+
 fs.mkdirSync(uploadDir, { recursive: true });
 
 const storage = multer.diskStorage({
@@ -70,8 +176,9 @@ app.post('/transcribe', upload.single('audio'), async (req, res) => {
       model: 'gpt-4o-transcribe',
       prompt,
     });
+    const text = removePromptEcho(transcription.text || '', [prompt, baseGeorgianPrompt, context]);
 
-    return res.json({ text: transcription.text || '' });
+    return res.json({ text });
   } catch (error) {
     console.error('OpenAI transcription failed:', error);
     return res.status(502).json({

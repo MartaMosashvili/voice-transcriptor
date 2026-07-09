@@ -477,8 +477,16 @@
       transcriptionContext = `${transcriptionContext} ${text}`.trim().slice(-CONTEXT_CHARS);
     }
 
+    function rebuildTranscriptionContext() {
+      transcriptionContext = transcriptEntries
+        .map((entry) => entry.text)
+        .join(' ')
+        .trim()
+        .slice(-CONTEXT_CHARS);
+    }
+
     function handleFinishedChunk(chunk) {
-      if (!chunk.parts.length || chunk.speechMs < MIN_SPEECH_MS) {
+      if (!chunk.parts.length || !chunk.sawSpeech || chunk.peakVolume < SILENCE_THRESHOLD || chunk.speechMs < MIN_SPEECH_MS) {
         return;
       }
 
@@ -494,9 +502,10 @@
       pendingTranscriptions += 1;
       updateProcessingState();
 
+      const contextForRequest = transcriptionContext;
       const formData = new FormData();
       formData.append('audio', audioBlob, `speech-${Date.now()}.webm`);
-      formData.append('context', transcriptionContext);
+      formData.append('context', contextForRequest);
 
       try {
         const response = await fetch('/transcribe', {
@@ -516,6 +525,9 @@
         }
       } catch (error) {
         console.error('Transcription request failed:', error);
+        if (error instanceof TypeError) {
+          rebuildTranscriptionContext();
+        }
         setStatus('The audio could not be transcribed. Please try again.');
       } finally {
         pendingTranscriptions -= 1;
@@ -530,6 +542,7 @@
         parts: [],
         speechMs: 0,
         sawSpeech: false,
+        peakVolume: 0,
         speechStartedAt: null,
         silentSince: null,
       };
@@ -590,6 +603,7 @@
       }
 
       const chunk = activeChunk;
+      chunk.peakVolume = Math.max(chunk.peakVolume, volume);
 
       if (volume >= SILENCE_THRESHOLD) {
         if (!chunk.sawSpeech) {
