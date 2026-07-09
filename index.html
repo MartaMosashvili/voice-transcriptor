@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Siri Orb</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      min-height: 100%;
+      margin: 0;
+    }
+
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+      background: #0a0a0a;
+      color: #ffffff;
+      font-family: Arial, sans-serif;
+    }
+
+    .orb-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: min(620px, calc(100vw - 40px));
+      gap: 24px;
+    }
+
+    .orb {
+      --orb-scale: 1;
+      --glow-soft: 24px;
+      --glow-mid: 54px;
+      --glow-wide: 92px;
+      --glow-alpha: 0.52;
+      position: relative;
+      width: 150px;
+      height: 150px;
+      padding: 0;
+      border: 0;
+      border-radius: 50%;
+      background: transparent;
+      cursor: pointer;
+      transform: scale(var(--orb-scale));
+      animation: breathe 2s ease-in-out infinite;
+      transition: filter 180ms ease;
+    }
+
+    .orb:disabled {
+      cursor: default;
+      opacity: 0.55;
+    }
+
+    .orb:focus-visible {
+      outline: 2px solid rgba(255, 255, 255, 0.85);
+      outline-offset: 10px;
+    }
+
+    .orb::before,
+    .orb::after {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      content: "";
+    }
+
+    .orb::before {
+      background:
+        radial-gradient(circle at 50% 42%, rgba(255, 255, 255, 0.95) 0 9%, rgba(184, 224, 255, 0.9) 18%, rgba(70, 157, 255, 0.74) 41%, rgba(41, 91, 255, 0.52) 62%, rgba(32, 76, 202, 0.18) 100%);
+      box-shadow:
+        0 0 var(--glow-soft) rgba(255, 255, 255, var(--glow-alpha)),
+        0 0 var(--glow-mid) rgba(105, 183, 255, 0.62),
+        0 0 var(--glow-wide) rgba(54, 119, 255, 0.48),
+        inset 0 0 24px rgba(255, 255, 255, 0.62),
+        inset 0 -18px 36px rgba(18, 73, 215, 0.42);
+    }
+
+    .orb::after {
+      opacity: 0;
+      background:
+        conic-gradient(from 0deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.54), rgba(65, 171, 255, 0), rgba(174, 212, 255, 0.5), rgba(255, 255, 255, 0));
+      mix-blend-mode: screen;
+      transition: opacity 180ms ease;
+    }
+
+    .orb.listening {
+      animation: none;
+      filter: saturate(1.2);
+    }
+
+    .orb.processing::after {
+      opacity: 0.62;
+      animation: processing-spin 1.35s linear infinite;
+    }
+
+    #transcript {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      width: 100%;
+      max-height: 34vh;
+      min-height: 1.25rem;
+      gap: 10px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+    }
+
+    .transcript-line {
+      width: 100%;
+      padding: 10px 12px;
+      border-left: 2px solid rgba(116, 190, 255, 0.8);
+      background: rgba(255, 255, 255, 0.055);
+      color: rgba(255, 255, 255, 0.92);
+      font-size: 1rem;
+      line-height: 1.45;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 260ms ease, transform 260ms ease;
+    }
+
+    .transcript-line.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .status {
+      min-height: 1.4rem;
+      color: rgba(255, 255, 255, 0.72);
+      font-size: 0.95rem;
+      line-height: 1.4;
+      text-align: center;
+    }
+
+    .status:empty {
+      display: none;
+    }
+
+    @keyframes breathe {
+      0%,
+      100% {
+        transform: scale(1);
+      }
+
+      50% {
+        transform: scale(1.08);
+      }
+    }
+
+    @keyframes processing-spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="orb-wrap" aria-label="Voice transcript">
+    <button class="orb" id="orb" type="button" aria-label="Start microphone transcription"></button>
+    <div id="transcript" aria-live="polite"></div>
+    <div class="status" id="status" role="status" aria-live="polite"></div>
+  </main>
+
+  <script>
+    const SILENCE_THRESHOLD = 0.025;
+    const SILENCE_MS = 800;
+    const MIN_SPEECH_MS = 500;
+    const VOLUME_LOG_MS = 200;
+
+    const orb = document.getElementById('orb');
+    const transcript = document.getElementById('transcript');
+    const status = document.getElementById('status');
+
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+
+    let stream = null;
+    let audioContext = null;
+    let analyser = null;
+    let audioData = null;
+    let activeChunk = null;
+    let animationFrame = null;
+    let isListening = false;
+    let lastAnalysisAt = 0;
+    let lastVolumeLogAt = 0;
+    let pendingTranscriptions = 0;
+    let recorderMimeType = '';
+
+    function getSupportedWebmMimeType() {
+      if (!window.MediaRecorder) {
+        return '';
+      }
+
+      const preferredTypes = ['audio/webm;codecs=opus', 'audio/webm'];
+      if (!MediaRecorder.isTypeSupported) {
+        return 'audio/webm';
+      }
+
+      return preferredTypes.find((type) => MediaRecorder.isTypeSupported(type)) || '';
+    }
+
+    function setStatus(message) {
+      status.textContent = message;
+    }
+
+    function setProcessing(isProcessing) {
+      orb.classList.toggle('processing', isProcessing);
+    }
+
+    function updateProcessingState() {
+      setProcessing(pendingTranscriptions > 0);
+    }
+
+    function updateOrbFromVolume(volume) {
+      const boost = Math.min(volume * 12, 1);
+      const scale = isListening ? 1 + boost * 0.2 : 1;
+
+      orb.style.setProperty('--orb-scale', scale.toFixed(3));
+      orb.style.setProperty('--glow-soft', `${24 + boost * 30}px`);
+      orb.style.setProperty('--glow-mid', `${54 + boost * 48}px`);
+      orb.style.setProperty('--glow-wide', `${92 + boost * 70}px`);
+      orb.style.setProperty('--glow-alpha', (0.52 + boost * 0.25).toFixed(2));
+    }
+
+    function appendTranscript(text) {
+      const line = document.createElement('div');
+      line.className = 'transcript-line';
+      line.textContent = text;
+      transcript.appendChild(line);
+
+      requestAnimationFrame(() => {
+        line.classList.add('visible');
+        line.scrollIntoView({ block: 'end', behavior: 'smooth' });
+      });
+    }
+
+    function handleFinishedChunk(chunk) {
+      if (!chunk.parts.length || chunk.speechMs < MIN_SPEECH_MS) {
+        return;
+      }
+
+      const audioBlob = new Blob(chunk.parts, { type: recorderMimeType });
+      if (!audioBlob.size) {
+        return;
+      }
+
+      sendChunkForTranscription(audioBlob);
+    }
+
+    async function sendChunkForTranscription(audioBlob) {
+      pendingTranscriptions += 1;
+      updateProcessingState();
+
+      const formData = new FormData();
+      formData.append('audio', audioBlob, `speech-${Date.now()}.webm`);
+
+      try {
+        const response = await fetch('/transcribe', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(errorText || `Transcription failed with status ${response.status}`);
+        }
+
+        const result = await response.json();
+        const text = (result.text || '').trim();
+        if (text) {
+          appendTranscript(text);
+        }
+      } catch (error) {
+        console.error('Transcription request failed:', error);
+        setStatus('The audio could not be transcribed. Please try again.');
+      } finally {
+        pendingTranscriptions -= 1;
+        updateProcessingState();
+      }
+    }
+
+    function createRecorderChunk() {
+      const recorder = new MediaRecorder(stream, { mimeType: recorderMimeType });
+      const chunk = {
+        recorder,
+        parts: [],
+        speechMs: 0,
+        sawSpeech: false,
+        silentSince: null,
+      };
+
+      recorder.addEventListener('dataavailable', (event) => {
+        if (event.data && event.data.size > 0) {
+          chunk.parts.push(event.data);
+        }
+      });
+
+      recorder.addEventListener('stop', () => {
+        handleFinishedChunk(chunk);
+      });
+
+      recorder.start();
+      activeChunk = chunk;
+    }
+
+    function rotateRecorderChunk() {
+      if (!activeChunk || !isListening) {
+        return;
+      }
+
+      const finishedChunk = activeChunk;
+      createRecorderChunk();
+
+      if (finishedChunk.recorder.state !== 'inactive') {
+        finishedChunk.recorder.stop();
+      }
+    }
+
+    function measureVolume() {
+      analyser.getByteTimeDomainData(audioData);
+
+      let sum = 0;
+      for (let index = 0; index < audioData.length; index += 1) {
+        const sample = (audioData[index] - 128) / 128;
+        sum += sample * sample;
+      }
+
+      return Math.sqrt(sum / audioData.length);
+    }
+
+    function analyzeMicrophone(now) {
+      if (!isListening || !analyser || !activeChunk) {
+        return;
+      }
+
+      const deltaMs = lastAnalysisAt ? now - lastAnalysisAt : 0;
+      lastAnalysisAt = now;
+
+      const volume = measureVolume();
+      updateOrbFromVolume(volume);
+
+      if (now - lastVolumeLogAt >= VOLUME_LOG_MS) {
+        console.log('mic volume', volume.toFixed(4), 'threshold', SILENCE_THRESHOLD);
+        lastVolumeLogAt = now;
+      }
+
+      if (volume >= SILENCE_THRESHOLD) {
+        activeChunk.speechMs += deltaMs;
+        activeChunk.sawSpeech = true;
+        activeChunk.silentSince = null;
+      } else if (activeChunk.sawSpeech) {
+        activeChunk.silentSince = activeChunk.silentSince || now;
+
+        if (now - activeChunk.silentSince >= SILENCE_MS) {
+          rotateRecorderChunk();
+        }
+      }
+
+      animationFrame = requestAnimationFrame(analyzeMicrophone);
+    }
+
+    async function startListening() {
+      if (isListening) {
+        return;
+      }
+
+      recorderMimeType = getSupportedWebmMimeType();
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !AudioContextClass || !recorderMimeType) {
+        orb.disabled = true;
+        setStatus('This browser cannot record microphone audio in the required WebM format.');
+        return;
+      }
+
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioContext = new AudioContextClass();
+        await audioContext.resume();
+
+        const source = audioContext.createMediaStreamSource(stream);
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 2048;
+        analyser.smoothingTimeConstant = 0.82;
+        audioData = new Uint8Array(analyser.fftSize);
+        source.connect(analyser);
+
+        isListening = true;
+        lastAnalysisAt = performance.now();
+        lastVolumeLogAt = 0;
+        orb.classList.add('listening');
+        orb.setAttribute('aria-label', 'Stop microphone transcription');
+        setStatus('');
+
+        createRecorderChunk();
+        animationFrame = requestAnimationFrame(analyzeMicrophone);
+      } catch (error) {
+        console.error('Microphone setup failed:', error);
+        const denied = error.name === 'NotAllowedError' || error.name === 'SecurityError';
+        setStatus(denied ? 'Microphone access was denied. Please allow microphone access and try again.' : 'The microphone could not be started. Please try again.');
+      }
+    }
+
+    async function stopListening() {
+      if (!isListening) {
+        return;
+      }
+
+      isListening = false;
+      orb.classList.remove('listening');
+      orb.style.setProperty('--orb-scale', '1');
+      orb.setAttribute('aria-label', 'Start microphone transcription');
+
+      if (animationFrame) {
+        cancelAnimationFrame(animationFrame);
+        animationFrame = null;
+      }
+
+      if (activeChunk && activeChunk.recorder.state !== 'inactive') {
+        activeChunk.recorder.stop();
+      }
+      activeChunk = null;
+
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+        stream = null;
+      }
+
+      if (audioContext) {
+        await audioContext.close();
+        audioContext = null;
+      }
+
+      analyser = null;
+      audioData = null;
+    }
+
+    orb.addEventListener('click', () => {
+      if (isListening) {
+        stopListening();
+      } else {
+        startListening();
+      }
+    });
+  </script>
+</body>
+</html>
