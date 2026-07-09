@@ -17,15 +17,17 @@
     html,
     body {
       width: 100%;
-      min-height: 100%;
+      height: 100%;
       margin: 0;
     }
 
     body {
       display: flex;
-      align-items: flex-start;
+      align-items: stretch;
       justify-content: center;
       min-height: 100vh;
+      min-height: 100dvh;
+      height: 100%;
       overflow: hidden;
       background:
         radial-gradient(circle at 50% 35%, rgba(15, 43, 83, 0.82) 0, rgba(7, 21, 45, 0.72) 27%, rgba(3, 8, 18, 0.95) 67%, #020307 100%);
@@ -59,8 +61,12 @@
       flex-direction: column;
       align-items: center;
       width: min(680px, 100vw);
+      height: 100%;
+      min-height: 0;
+      max-height: 100dvh;
       gap: 0;
-      padding: max(42px, calc(35vh - 75px)) 20px 32px;
+      padding: max(42px, calc(35vh - 75px)) 20px max(20px, env(safe-area-inset-bottom, 0px));
+      overflow: hidden;
     }
 
     .orb {
@@ -76,6 +82,7 @@
       --glow-mid-color: rgba(105, 183, 255, 0.62);
       --glow-wide-color: rgba(54, 119, 255, 0.48);
       --inset-deep: rgba(18, 73, 215, 0.42);
+      flex-shrink: 0;
       position: relative;
       width: 150px;
       height: 150px;
@@ -167,6 +174,7 @@
 
     .state-label {
       display: flex;
+      flex-shrink: 0;
       align-items: center;
       justify-content: center;
       min-height: 1.5rem;
@@ -201,15 +209,16 @@
 
     #transcript {
       display: flex;
+      flex: 1 1 auto;
       flex-direction: column;
       align-items: center;
       width: 100%;
       max-width: 640px;
-      max-height: 36vh;
-      min-height: 1.25rem;
+      min-height: 0;
       gap: 4px;
+      overflow-x: hidden;
       overflow-y: auto;
-      padding: 2px clamp(14px, 4vw, 28px) 8px;
+      padding: 2px clamp(14px, 4vw, 28px) 12px;
       scrollbar-color: transparent transparent;
       scrollbar-width: none;
       transition: scrollbar-color 180ms ease;
@@ -254,7 +263,15 @@
 
     .controls {
       display: flex;
+      flex-shrink: 0;
       gap: 10px;
+      margin-top: 8px;
+      padding: 10px 16px;
+      border-radius: 999px;
+      background: rgba(4, 12, 28, 0.55);
+      -webkit-backdrop-filter: blur(12px);
+      backdrop-filter: blur(12px);
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.28);
       opacity: 0;
       transform: translateY(-4px);
       pointer-events: none;
@@ -297,7 +314,9 @@
     }
 
     .status {
+      flex-shrink: 0;
       min-height: 1.4rem;
+      margin-top: 10px;
       color: rgba(255, 255, 255, 0.72);
       font-size: 0.95rem;
       line-height: 1.4;
