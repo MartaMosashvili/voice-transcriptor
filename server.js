@@ -16,6 +16,7 @@ if (!process.env.OPENAI_API_KEY) {
 }
 
 const app = express();
+app.set('trust proxy', 1);
 const port = process.env.PORT || 3000;
 const uploadDir = path.join(__dirname, 'uploads');
 const maxFileSize = 25 * 1024 * 1024;
