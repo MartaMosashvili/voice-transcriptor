@@ -371,10 +371,10 @@
   </main>
 
   <script>
-    const SILENCE_THRESHOLD = 0.025;
-    const SILENCE_MS = 800;
-    const MIN_SPEECH_MS = 500;
-    const MAX_CHUNK_MS = 12000;
+    const SILENCE_THRESHOLD = 0.012;
+    const SILENCE_MS = 900;
+    const MIN_SPEECH_MS = 800;
+    const MAX_CHUNK_MS = 8000;
     const CONTEXT_CHARS = 200;
 
     const orb = document.getElementById('orb');
@@ -696,7 +696,7 @@
       }
 
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+       stream = await navigator.mediaDevices.getUserMedia({ audio: { autoGainControl: true, noiseSuppression: true, echoCancellation: false } });
         audioContext = new AudioContextClass();
         await audioContext.resume();
 
