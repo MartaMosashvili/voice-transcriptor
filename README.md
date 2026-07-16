@@ -1,6 +1,17 @@
 # Transcriptor
 
+**🔴 Live Demo:** https://voice-transcriptor.onrender.com
+
+*პირველი ჩატვირთვა შეიძლება ~1 წუთი გაგრძელდეს (უფასო სერვერი უმოქმედობისას იძინებს). რეკომენდებული ბრაუზერი: **Chrome** ან **Edge** (Windows, macOS, Android). Safari და iOS არ არის მხარდაჭერილი WebM-ჩაწერის შეზღუდვის გამო.*
+
 Live Georgian speech transcription web app. Node.js/Express backend calls OpenAI `gpt-4o-transcribe`; vanilla JS frontend with a Siri-style orb, chunked recording with silence detection, cross-chunk context continuity, and prompt-echo stripping.
+
+## როგორ გამოვიყენოთ
+
+1. დააჭირეთ წრეს — ბრაუზერი მოითხოვს მიკროფონზე წვდომას, დაუშვით
+2. ისაუბრეთ ბუნებრივი ტემპით — პირველ რიგში ქართულად, თუმცა სისტემა ინგლისურ და რუსულ მეტყველებასაც ცნობს (მათ შორის ენების შერევას ერთ წინადადებაში)
+3. **დააპაუზეთ საუბარი** — ტექსტი ეკრანზე პაუზიდან 1-3 წამში გამოჩნდება (ჩანაწერი მუშავდება AI მოდელით, ამიტომ მცირე დაყოვნება ნორმალურია)
+4. ხელახლა დაჭერით მოსმენა ჩერდება; „გადმოწერა" ინახავს ტრანსკრიპტს ფაილად, „გასუფთავება" ასუფთავებს ეკრანს
 
 ## Features
 
@@ -8,6 +19,7 @@ Live Georgian speech transcription web app. Node.js/Express backend calls OpenAI
 - **Cross-chunk context** — the last 200 characters of transcript are sent as prompt context for the next chunk
 - **Prompt-echo protection** — server-side logic strips repeated prompt text from model output
 - **Rate limiting** — `/transcribe` accepts at most 30 requests per minute per IP
+- **მრავალენოვანი ამოცნობა** — ძირითადი ენა ქართულია; ინგლისური და რუსული ასევე მუშაობს, code-switching-ის ჩათვლით
 
 ## Local setup
 

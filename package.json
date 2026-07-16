@@ -1,7 +1,7 @@
 {
   "name": "transcriptor",
   "version": "1.0.0",
-  "description": "Simple Whisper transcription server with a static frontend.",
+  "description": "Live Georgian speech transcription with a Siri-style orb (OpenAI gpt-4o-transcribe).",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
